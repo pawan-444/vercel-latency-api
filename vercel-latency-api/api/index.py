@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-with open("telemetry.json", "r") as f:
+with open("q-vercel-latency.json", "r") as f:
     telemetry = json.load(f)
 
 
