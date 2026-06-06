@@ -17,6 +17,11 @@ with open("telemetry.json", "r") as f:
     telemetry = json.load(f)
 
 
+@app.get("/")
+def home():
+    return {"status": "working"}
+
+
 @app.post("/")
 def analytics(payload: dict):
 
