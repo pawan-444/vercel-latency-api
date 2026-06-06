@@ -8,19 +8,16 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["POST"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
 with open("q-vercel-latency.json", "r") as f:
     telemetry = json.load(f)
 
-
 @app.get("/")
 def home():
     return {"status": "working"}
-
 
 @app.post("/")
 def analytics(payload: dict):
@@ -32,22 +29,17 @@ def analytics(payload: dict):
 
     for region in regions:
 
-        records = [
-            r for r in telemetry
-            if r["region"] == region
-        ]
+        records = [r for r in telemetry if r["region"] == region]
 
         latencies = [r["latency_ms"] for r in records]
-        uptimes = [r["uptime"] for r in records]
+
+        uptimes = [r["uptime_pct"] for r in records]
 
         result[region] = {
-            "avg_latency": round(sum(latencies) / len(latencies), 2),
-            "p95_latency": round(float(np.percentile(latencies, 95)), 2),
-            "avg_uptime": round(sum(uptimes) / len(uptimes), 2),
-            "breaches": sum(
-                1 for x in latencies
-                if x > threshold
-            )
+            "avg_latency": sum(latencies) / len(latencies),
+            "p95_latency": float(np.percentile(latencies, 95)),
+            "avg_uptime": sum(uptimes) / len(uptimes),
+            "breaches": sum(1 for x in latencies if x > threshold)
         }
 
     return result
