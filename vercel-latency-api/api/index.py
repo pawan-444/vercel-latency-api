@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import json
 import numpy as np
 
@@ -17,7 +18,10 @@ with open("q-vercel-latency.json", "r") as f:
 
 @app.get("/")
 def home():
-    return {"status": "working"}
+    return JSONResponse(
+        content={"status": "working"},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
 
 @app.post("/")
 def analytics(payload: dict):
@@ -28,11 +32,9 @@ def analytics(payload: dict):
     result = {}
 
     for region in regions:
-
         records = [r for r in telemetry if r["region"] == region]
 
         latencies = [r["latency_ms"] for r in records]
-
         uptimes = [r["uptime_pct"] for r in records]
 
         result[region] = {
@@ -42,4 +44,7 @@ def analytics(payload: dict):
             "breaches": sum(1 for x in latencies if x > threshold)
         }
 
-    return result
+    return JSONResponse(
+        content=result,
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
