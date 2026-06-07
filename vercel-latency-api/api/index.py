@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import json
 import numpy as np
+from pathlib import Path
 
 app = FastAPI()
 
@@ -14,7 +15,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-with open("q-vercel-latency.json", "r") as f:
+DATA_FILE = Path(__file__).parent.parent / "q-vercel-latency.json"
+
+with open(DATA_FILE, "r") as f:
     telemetry = json.load(f)
 
 # Explicit OPTIONS handler for preflight
