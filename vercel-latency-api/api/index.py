@@ -1,73 +1,68 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List
-import telemetry_data  # Importing the data we created in Step 1
+from fastapi import FastAPI, Response
+from fastapi.responses import JSONResponse
+from pathlib import Path
+import json
+import numpy as np
 
 app = FastAPI()
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["POST", "GET", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
-    expose_headers=["Access-Control-Allow-Origin"],
-)
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Expose-Headers": "Access-Control-Allow-Origin",
+}
 
-# 1. Enable CORS for any origin
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+DATA_FILE = Path(__file__).parent.parent / "q-vercel-latency.json"
 
-# 2. Define the Request Schema
-class AnalyticsRequest(BaseModel):
-    regions: List[str]
-    threshold_ms: int
+with open(DATA_FILE, "r", encoding="utf-8") as f:
+    telemetry = json.load(f)
 
-# 3. Define the POST Endpoint
+
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return Response(status_code=200, headers=CORS_HEADERS)
+
+
+@app.get("/")
+def home():
+    return JSONResponse(
+        {"status": "working"},
+        headers=CORS_HEADERS
+    )
+
+
 @app.post("/")
-def analyze_telemetry(req: AnalyticsRequest):
-    # Dictionary to store results
-    results = {}
+def analytics(payload: dict):
 
-    # Iterate over requested regions in the JSON body
-    for region in req.regions:
-        # Filter data for specific region
-        region_entries = [record for record in telemetry_data.telemetry_db if record["region"] == region]
+    regions = payload.get("regions", [])
+    threshold = payload.get("threshold_ms", 180)
 
-        # If no data exists for region, skip or return empty (omitting for brevity)
-        if not region_entries:
-            continue
+    result = {}
 
-        # Extract metrics into lists
-        latencies = sorted([r["latency_ms"] for r in region_entries])
-        uptimes = [r["uptime"] for r in region_entries]
+    for region in regions:
 
-        # A. Calculate Average Latency
-        avg_latency = sum(latencies) / len(latencies)
+        records = [
+            r for r in telemetry
+            if r["region"] == region
+        ]
 
-        # B. Calculate p95 Latency
-        # Index formula: (N - 1) * 0.95. Sort ensures we grab the top 5%.
-        idx_p95 = int((len(latencies) - 1) * 0.95)
-        p95_latency = latencies[idx_p95]
+        latencies = [r["latency_ms"] for r in records]
+        uptimes = [r["uptime_pct"] for r in records]
 
-        # C. Calculate Average Uptime
-        avg_uptime = sum(uptimes) / len(uptimes)
-
-        # D. Calculate Breaches (count where latency > threshold)
-        breaches = sum(1 for lat in latencies if lat > req.threshold_ms)
-
-        # Add to results dictionary
-        results[region] = {
-            "avg_latency": round(avg_latency, 2),
-            "p95_latency": p95_latency,
-            "avg_uptime": round(avg_uptime, 2),
-            "breaches": breaches
+        result[region] = {
+            "avg_latency": round(sum(latencies) / len(latencies), 2),
+            "p95_latency": round(float(np.percentile(latencies, 95)), 2),
+            "avg_uptime": round(sum(uptimes) / len(uptimes), 2),
+            "breaches": sum(
+                1 for x in latencies
+                if x > threshold
+            )
         }
 
-    return results
+    return JSONResponse(
+        {
+            "regions": result
+        },
+        headers=CORS_HEADERS
+    )
