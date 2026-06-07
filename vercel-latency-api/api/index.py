@@ -1,37 +1,41 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Response
+from fastapi.responses import JSONResponse
 from pathlib import Path
 import json
 import numpy as np
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Expose-Headers": "Access-Control-Allow-Origin",
+}
 
-telemetry = []
+data_file = Path(__file__).parent.parent / "q-vercel-latency.json"
 
-try:
-    data_file = Path(__file__).parent.parent / "q-vercel-latency.json"
+with open(data_file, "r", encoding="utf-8") as f:
+    telemetry = json.load(f)
 
-    with open(data_file, "r", encoding="utf-8") as f:
-        telemetry = json.load(f)
 
-except Exception as e:
-    telemetry = []
-    print("LOAD ERROR:", e)
+@app.options("/{path:path}")
+def options_handler(path: str):
+    return Response(
+        status_code=200,
+        headers=CORS_HEADERS
+    )
 
 
 @app.get("/")
 def home():
-    return {
-        "status": "working",
-        "records_loaded": len(telemetry)
-    }
+    return JSONResponse(
+        content={
+            "status": "working",
+            "records_loaded": len(telemetry)
+        },
+        headers=CORS_HEADERS
+    )
 
 
 @app.post("/")
@@ -49,15 +53,6 @@ def analytics(payload: dict):
             if r["region"] == region
         ]
 
-        if not records:
-            result[region] = {
-                "avg_latency": 0,
-                "p95_latency": 0,
-                "avg_uptime": 0,
-                "breaches": 0
-            }
-            continue
-
         latencies = [r["latency_ms"] for r in records]
         uptimes = [r["uptime_pct"] for r in records]
 
@@ -65,9 +60,15 @@ def analytics(payload: dict):
             "avg_latency": round(sum(latencies) / len(latencies), 2),
             "p95_latency": round(float(np.percentile(latencies, 95)), 2),
             "avg_uptime": round(sum(uptimes) / len(uptimes), 2),
-            "breaches": sum(1 for x in latencies if x > threshold)
+            "breaches": sum(
+                1 for x in latencies
+                if x > threshold
+            )
         }
 
-    return {
-        "regions": result
-    }
+    return JSONResponse(
+        content={
+            "regions": result
+        },
+        headers=CORS_HEADERS
+    )
