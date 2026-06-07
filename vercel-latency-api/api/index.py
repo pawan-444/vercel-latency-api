@@ -71,8 +71,7 @@ def analytics(payload: dict):
         }
 
     return JSONResponse(
-        content=result,
-        headers={
-            "Access-Control-Allow-Origin": "*"
+        content={
+        "regions": result
         }
     )
